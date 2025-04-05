@@ -1,0 +1,413 @@
+{% extends "base.html" %}
+
+{% block title %}Game Room{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <!-- Game Area -->
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Question <span id="question-number">1</span>/18</h5>
+                </div>
+                <div class="card-body">
+                    <div id="question-container">
+                        <!-- Question content will be loaded here -->
+                    </div>
+                    <form id="answer-form" class="mt-3">
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="answer-input" placeholder="Enter your answer">
+                            <button class="btn btn-primary" type="submit">Submit</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Players List -->
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Players</h5>
+                </div>
+                <div class="card-body">
+                    <div id="players-list">
+                        <!-- Players will be listed here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat Area -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Chat</h5>
+                </div>
+                <div class="card-body">
+                    <div id="chat-messages" class="chat-container">
+                        <!-- Chat messages will appear here -->
+                    </div>
+                    <form id="chat-form" class="mt-3">
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="chat-input" placeholder="Type a message">
+                            <button class="btn btn-primary" type="submit">Send</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Major Power Modal -->
+<div class="modal fade" id="majorPowerModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Major Power Available!</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Choose your power:</p>
+                <button class="btn btn-success w-100 mb-2" id="revive-power">Revive Your Team</button>
+                <button class="btn btn-danger w-100" id="eliminate-power">Eliminate Another Team</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Attack Modal -->
+<div class="modal fade" id="attackModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Attack Player</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="attack-form">
+                    <div class="mb-3">
+                        <label class="form-label">Points to Use</label>
+                        <input type="number" class="form-control" id="attack-points" min="1" max="10">
+                    </div>
+                    <button type="submit" class="btn btn-danger w-100">Attack</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Eliminate Modal -->
+<div class="modal fade" id="eliminateModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Eliminate Team</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="eliminate-form">
+                    <div class="mb-3">
+                        <label class="form-label">Select Team to Eliminate</label>
+                        <select class="form-select" id="eliminate-target">
+                            <option value="">Select a team...</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-danger w-100">Eliminate</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Game Over Modal -->
+<div class="modal fade" id="gameOverModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Game Over</h5>
+            </div>
+            <div class="modal-body">
+                <p id="game-over-message">Game Over!</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" id="return-home">Return to Home</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const socket = io();
+    const groupCode = '{{ group.code }}';
+    let currentQuestion = 1;
+    let majorPowerAvailable = false;
+    let players = [];
+
+    // Join the game room
+    socket.emit('join', { group_code: groupCode });
+
+    // Handle game start
+    socket.on('game_started', () => {
+        loadQuestion(1);
+    });
+
+    // Handle next question
+    socket.on('next_question', (data) => {
+        currentQuestion = data.question_number;
+        loadQuestion(currentQuestion);
+    });
+
+    // Handle correct answer
+    socket.on('correct_answer', (data) => {
+        if (data.username === '{{ current_user.username }}') {
+            showSuccess('Correct answer! +1 point');
+        }
+        updatePlayerPoints(data.username, data.points);
+    });
+
+    // Handle major power availability
+    socket.on('major_power_available', (data) => {
+        if (data.username === '{{ current_user.username }}') {
+            majorPowerAvailable = true;
+            $('#majorPowerModal').modal('show');
+        }
+    });
+
+    // Handle attack results
+    socket.on('attack_result', (data) => {
+        updatePlayerLives(data.target, data.target_lives);
+        if (data.attacker === '{{ current_user.username }}') {
+            showSuccess(`Attack successful! Used ${data.points_used} points`);
+        }
+    });
+
+    // Handle vest purchase
+    socket.on('vest_purchased', (data) => {
+        if (data.username === '{{ current_user.username }}') {
+            showSuccess('Vest purchased successfully!');
+        }
+        updatePlayerVest(data.username, true);
+    });
+
+    // Handle game over
+    socket.on('game_over', (data) => {
+        $('#game-over-message').text(data.message || 'Game Over!');
+        $('#gameOverModal').modal('show');
+    });
+
+    // Handle errors
+    socket.on('error', (data) => {
+        showError(data.msg);
+    });
+
+    // Handle player list updates
+    socket.on('update_players', (data) => {
+        players = data.players;
+        renderPlayerList();
+    });
+
+    // Handle chat messages
+    socket.on('chat_message', (data) => {
+        appendChatMessage(data.username, data.message, data.timestamp);
+    });
+
+    // Answer form submission
+    $('#answer-form').on('submit', (e) => {
+        e.preventDefault();
+        const answer = $('#answer-input').val();
+        socket.emit('submit_answer', {
+            group_code: groupCode,
+            answer: answer
+        });
+        $('#answer-input').val('');
+    });
+
+    // Chat form submission
+    $('#chat-form').on('submit', (e) => {
+        e.preventDefault();
+        const message = $('#chat-input').val();
+        if (message.trim()) {
+            socket.emit('chat_message', {
+                group_code: groupCode,
+                message: message
+            });
+            $('#chat-input').val('');
+        }
+    });
+
+    // Attack form submission
+    $('#attack-form').on('submit', (e) => {
+        e.preventDefault();
+        const points = $('#attack-points').val();
+        const target = $('#attackModal').data('target');
+        socket.emit('attack', {
+            group_code: groupCode,
+            target: target,
+            points: parseInt(points)
+        });
+        $('#attackModal').modal('hide');
+    });
+
+    // Major power buttons
+    $('#revive-power').on('click', () => {
+        socket.emit('use_major_power', {
+            group_code: groupCode,
+            power_type: 'revive'
+        });
+        $('#majorPowerModal').modal('hide');
+    });
+
+    $('#eliminate-power').on('click', () => {
+        // Populate the eliminate target dropdown
+        const targetSelect = $('#eliminate-target');
+        targetSelect.empty();
+        targetSelect.append('<option value="">Select a team...</option>');
+        
+        players.forEach(player => {
+            if (player.username !== '{{ current_user.username }}' && player.lives > 0) {
+                targetSelect.append(`<option value="${player.username}">${player.username}</option>`);
+            }
+        });
+        
+        $('#eliminateModal').modal('show');
+        $('#majorPowerModal').modal('hide');
+    });
+
+    // Eliminate form submission
+    $('#eliminate-form').on('submit', (e) => {
+        e.preventDefault();
+        const target = $('#eliminate-target').val();
+        if (target) {
+            socket.emit('use_major_power', {
+                group_code: groupCode,
+                power_type: 'eliminate',
+                target: target
+            });
+            $('#eliminateModal').modal('hide');
+        }
+    });
+
+    // Return home button
+    $('#return-home').on('click', () => {
+        window.location.href = '/';
+    });
+
+    // Helper functions
+    function loadQuestion(number) {
+        // Load question content from your backend
+        $('#question-number').text(number);
+        // This would typically fetch the question from your backend
+        // For now, we'll just show a placeholder
+        $('#question-container').html(`<p>Question ${number} content will be loaded here.</p>`);
+    }
+
+    function renderPlayerList() {
+        const playersList = $('#players-list');
+        playersList.empty();
+        
+        players.forEach(player => {
+            const playerCard = $(`
+                <div class="card mb-2" id="player-${player.username}">
+                    <div class="card-body p-2">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="mb-0">${player.username} ${player.is_owner ? '(Owner)' : ''}</h6>
+                                <small class="text-muted">
+                                    Points: <span class="points">${player.points}</span> | 
+                                    Lives: <span class="lives">${player.lives}</span>
+                                    <span class="vest-status">${player.has_vest ? '🛡️' : ''}</span>
+                                </small>
+                            </div>
+                            ${player.username !== '{{ current_user.username }}' && player.lives > 0 ? 
+                                `<button class="btn btn-sm btn-danger attack-btn" data-target="${player.username}">Attack</button>` : 
+                                ''}
+                        </div>
+                    </div>
+                </div>
+            `);
+            
+            playersList.append(playerCard);
+        });
+        
+        // Add event listeners to attack buttons
+        $('.attack-btn').on('click', function() {
+            const target = $(this).data('target');
+            $('#attackModal').data('target', target);
+            $('#attackModal').modal('show');
+        });
+    }
+
+    function updatePlayerPoints(username, points) {
+        const player = players.find(p => p.username === username);
+        if (player) {
+            player.points = points;
+            renderPlayerList();
+        }
+    }
+
+    function updatePlayerLives(username, lives) {
+        const player = players.find(p => p.username === username);
+        if (player) {
+            player.lives = lives;
+            renderPlayerList();
+        }
+    }
+
+    function updatePlayerVest(username, hasVest) {
+        const player = players.find(p => p.username === username);
+        if (player) {
+            player.has_vest = hasVest;
+            renderPlayerList();
+        }
+    }
+
+    function appendChatMessage(username, message, timestamp) {
+        const chatMessages = $('#chat-messages');
+        const messageElement = $(`
+            <div class="chat-message mb-2">
+                <small class="text-muted">${timestamp}</small>
+                <strong>${username}:</strong> ${message}
+            </div>
+        `);
+        chatMessages.append(messageElement);
+        chatMessages.scrollTop(chatMessages[0].scrollHeight);
+    }
+
+    function showSuccess(message) {
+        const toast = $(`
+            <div class="toast align-items-center text-white bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                <div class="d-flex">
+                    <div class="toast-body">
+                        ${message}
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+            </div>
+        `);
+        $('.toast-container').append(toast);
+        const bsToast = new bootstrap.Toast(toast);
+        bsToast.show();
+        setTimeout(() => toast.remove(), 3000);
+    }
+
+    function showError(message) {
+        const toast = $(`
+            <div class="toast align-items-center text-white bg-danger border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                <div class="d-flex">
+                    <div class="toast-body">
+                        ${message}
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+            </div>
+        `);
+        $('.toast-container').append(toast);
+        const bsToast = new bootstrap.Toast(toast);
+        bsToast.show();
+        setTimeout(() => toast.remove(), 3000);
+    }
+</script>
+{% endblock %} 

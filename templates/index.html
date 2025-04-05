@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}Home{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card mb-4">
+            <div class="card-body">
+                <h1 class="text-center mb-4">Welcome to Firewall: Zero Hour</h1>
+                <p class="lead text-center">A competitive coding battle royale where teams compete to solve problems and eliminate each other!</p>
+                
+                <div class="row mt-5">
+                    <div class="col-md-6">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h3>Join a Group</h3>
+                                <form action="{{ url_for('main.join_group') }}" method="POST">
+                                    <div class="mb-3">
+                                        <label for="group_code" class="form-label">Group Code</label>
+                                        <input type="text" class="form-control" id="group_code" name="group_code" required>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary w-100">Join Group</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h3>Create a Group</h3>
+                                <p>Start a new game and become the group owner!</p>
+                                <form action="{{ url_for('main.create_group') }}" method="POST">
+                                    <button type="submit" class="btn btn-success w-100">Create New Group</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <h2 class="mb-4">Game Rules</h2>
+                <div class="row">
+                    <div class="col-md-6">
+                        <h4>Basic Rules</h4>
+                        <ul>
+                            <li>Each team starts with 2 lives</li>
+                            <li>18 questions total (17 regular + 1 major)</li>
+                            <li>Regular questions worth 1 point each</li>
+                            <li>Points can be used to attack other teams</li>
+                            <li>Teams can't be attacked more than twice consecutively</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h4>Special Features</h4>
+                        <ul>
+                            <li>Major question (18th) grants special powers:
+                                <ul>
+                                    <li>Instantly revive your team</li>
+                                    <li>Instantly eliminate another team</li>
+                                </ul>
+                            </li>
+                            <li>Purchase vests for additional protection</li>
+                            <li>Real-time chat with team members</li>
+                            <li>Game ends when only two teams remain</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 
